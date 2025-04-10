@@ -1,5 +1,8 @@
-import { startService } from './services/orderService'
+// src/app.ts
+import { consumeOrders } from './queues/orderConsumer';
+import dotenv from 'dotenv';
+dotenv.config();
 
-startService().catch((error) => {
-  console.error('Failed to start order service:', error);
-});
+consumeOrders();  // Start consuming from RabbitMQ
+
+// initialize DB connection

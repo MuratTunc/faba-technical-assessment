@@ -1,22 +1,19 @@
 {
     "compilerOptions": {
-      "target": "ES6",                         // Compile to ES6 for better modern JS compatibility
-      "module": "commonjs",                    // Use CommonJS module system (for Node.js)
-      "outDir": "./dist",                      // Specify the output folder for compiled JavaScript files
-      "rootDir": "./src",                      // Define the root directory for TypeScript files
-      "esModuleInterop": true,                 // Allow default imports from non-ES modules
-      "skipLibCheck": true,                    // Skip type checking of declaration files (speeds up the build)
-      "forceConsistentCasingInFileNames": true, // Ensure consistent casing in file imports
-      "resolveJsonModule": true,               // Allow importing .json files
-      "strict": true,                          // Enable strict type-checking options (recommended)
-      "moduleResolution": "node"               // Use Node.js module resolution strategy
+      "target": "ES6",
+      "module": "commonjs",
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "resolveJsonModule": true,
+      "strict": true,
+      "moduleResolution": "node",
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true
     },
-    "include": [
-      "src/**/*.ts"                            // Include all TypeScript files inside the src folder
-    ],
-    "exclude": [
-      "node_modules",                          // Exclude the node_modules folder from being compiled
-      "**/*.test.ts"                           // Exclude test files (if you don't want to compile them)
-    ]
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", "**/*.test.ts"]
   }
   
