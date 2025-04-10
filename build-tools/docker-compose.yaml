@@ -1,0 +1,112 @@
+version: '3.9'  # Docker Compose file version
+
+services:
+  # User Service Definition
+  user-service:
+    build:
+      context: ./../user-service  # Path to the user service code
+      dockerfile: ./../user-service/user-service.dockerfile  # Dockerfile for building the user service
+    image: ${USER_SERVICE_IMAGE_NAME}  # Name of the Docker image for user service
+    container_name: ${USER_SERVICE_CONTAINER_NAME}  # Container name for user service
+    restart: always  # Restart the container automatically if it stops
+    depends_on:
+      user-db:
+        condition: service_healthy  # Wait for the user database to be healthy before starting the service
+    ports:
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"  # Map the user service port from the host to the container
+    env_file:
+      - .env  # Load environment variables from .env file
+
+  # Customer Service Definition
+  customer-service:
+    build:
+      context: ./../customer-service  # Path to the customer service code
+      dockerfile: ./../customer-service/customer-service.dockerfile  # Dockerfile for building the customer service
+    image: ${CUSTOMER_SERVICE_IMAGE_NAME}  # Name of the Docker image for customer service
+    container_name: ${CUSTOMER_SERVICE_CONTAINER_NAME}  # Container name for customer service
+    restart: always  # Restart the container automatically if it stops
+    depends_on:
+      customer-db:
+        condition: service_healthy  # Wait for the customer database to be healthy before starting the service
+    ports:
+      - "${CUSTOMER_SERVICE_PORT}:${CUSTOMER_SERVICE_PORT}"  # Map the customer service port from the host to the container
+    env_file:
+      - .env  # Load environment variables from .env file
+
+  # Sales Tracking Service Definition
+  salestracking-service:
+    build:
+      context: ./../salestracking-service  # Path to the sales tracking service code
+      dockerfile: ./../salestracking-service/salestracking-service.dockerfile  # Dockerfile for building the sales tracking service
+    image: ${SALESTRACKING_SERVICE_IMAGE_NAME}  # Name of the Docker image for sales tracking service
+    container_name: ${SALESTRACKING_SERVICE_CONTAINER_NAME}  # Container name for sales tracking service
+    restart: always  # Restart the container automatically if it stops
+    depends_on:
+      salestracking-db:
+        condition: service_healthy  # Wait for the sales tracking database to be healthy before starting the service
+    ports:
+      - "${SALESTRACKING_SERVICE_PORT}:${SALESTRACKING_SERVICE_PORT}"  # Map the sales tracking service port from the host to the container
+    env_file:
+      - .env  # Load environment variables from .env file
+
+  # User Database Definition
+  user-db:
+    image: postgres:15  # Use the official PostgreSQL image version 15
+    container_name: ${USER_POSTGRES_DB_CONTAINER_NAME}  # Container name for user database
+    restart: always  # Restart the container automatically if it stops
+    environment:
+      POSTGRES_USER: ${USER_POSTGRES_DB_USER}  # PostgreSQL username
+      POSTGRES_PASSWORD: ${USER_POSTGRES_DB_PASSWORD}  # PostgreSQL password
+      POSTGRES_DB: ${USER_POSTGRES_DB_NAME}  # Name of the PostgreSQL database
+    ports:
+      - "${USER_POSTGRES_DB_PORT}:5432"  # Map PostgreSQL port from the host to the container
+    healthcheck:  # Health check to ensure PostgreSQL is ready before starting user service
+      test: ["CMD", "pg_isready", "-U", "${USER_POSTGRES_DB_USER}", "-d", "${USER_POSTGRES_DB_NAME}"]
+      interval: 10s  # Interval between checks
+      timeout: 5s  # Timeout duration
+      retries: 5  # Number of retries before considering the service as unhealthy
+    volumes:
+      - user_db_data:/var/lib/postgresql/data  # Persistent storage for PostgreSQL data
+
+  # Customer Database Definition
+  customer-db:
+    image: postgres:15  # Use the official PostgreSQL image version 15
+    container_name: ${CUSTOMER_POSTGRES_DB_CONTAINER_NAME}  # Container name for customer database
+    restart: always  # Restart the container automatically if it stops
+    environment:
+      POSTGRES_USER: ${CUSTOMER_POSTGRES_DB_USER}  # PostgreSQL username
+      POSTGRES_PASSWORD: ${CUSTOMER_POSTGRES_DB_PASSWORD}  # PostgreSQL password
+      POSTGRES_DB: ${CUSTOMER_POSTGRES_DB_NAME}  # Name of the PostgreSQL database
+    ports:
+      - "${CUSTOMER_POSTGRES_DB_PORT}:5432"  # Map PostgreSQL port from the host to the container
+    healthcheck:  # Health check to ensure PostgreSQL is ready before starting customer service
+      test: ["CMD", "pg_isready", "-U", "${CUSTOMER_POSTGRES_DB_USER}", "-d", "${CUSTOMER_POSTGRES_DB_NAME}"]
+      interval: 10s  # Interval between checks
+      timeout: 5s  # Timeout duration
+      retries: 5  # Number of retries before considering the service as unhealthy
+    volumes:
+      - customer_db_data:/var/lib/postgresql/data  # Persistent storage for PostgreSQL data
+
+  # Sales Tracking Database Definition
+  salestracking-db:
+    image: postgres:15  # Use the official PostgreSQL image version 15
+    container_name: ${SALESTRACKING_POSTGRES_DB_CONTAINER_NAME}  # Container name for sales tracking database
+    restart: always  # Restart the container automatically if it stops
+    environment:
+      POSTGRES_USER: ${SALESTRACKING_POSTGRES_DB_USER}  # PostgreSQL username
+      POSTGRES_PASSWORD: ${SALESTRACKING_POSTGRES_DB_PASSWORD}  # PostgreSQL password
+      POSTGRES_DB: ${SALESTRACKING_POSTGRES_DB_NAME}  # Name of the PostgreSQL database
+    ports:
+      - "${SALESTRACKING_POSTGRES_DB_PORT}:5432"  # Map PostgreSQL port from the host to the container
+    healthcheck:  # Health check to ensure PostgreSQL is ready before starting sales tracking service
+      test: ["CMD", "pg_isready", "-U", "${SALESTRACKING_POSTGRES_DB_USER}", "-d", "${SALESTRACKING_POSTGRES_DB_NAME}"]
+      interval: 10s  # Interval between checks
+      timeout: 5s  # Timeout duration
+      retries: 5  # Number of retries before considering the service as unhealthy
+    volumes:
+      - salestracking_db_data:/var/lib/postgresql/data  # Persistent storage for PostgreSQL data
+
+volumes:
+  user_db_data:  # Define volume for user database data
+  customer_db_data:  # Define volume for customer database data
+  salestracking_db_data:  # Define volume for sales tracking database data
