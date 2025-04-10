@@ -1,20 +1,23 @@
-# api-gateway.dockerfile
+# api-gateway.Dockerfile
+
+# Use Node base image
 FROM node:18
 
-# Create app directory
-WORKDIR /usr/src/app
+# Set workdir
+WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy package.json and install dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy the rest of the app source
+# Copy all other files
 COPY . .
 
-# Expose the port the gateway listens on
+# Build TypeScript
+RUN npm run build
+
+# Expose port (match your API port, e.g., 3000)
 EXPOSE 3000
 
-# Start the gateway
-CMD [ "npm", "start" ]
+# Start the app
+CMD ["npm", "start"]
