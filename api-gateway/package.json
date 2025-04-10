@@ -1,0 +1,21 @@
+{
+  "name": "api-gateway",
+  "version": "1.0.0",
+  "main": "dist/gateway.js",  
+  "scripts": {
+    "start": "node dist/gateway.js",  
+    "build": "tsc"                     
+  },
+  "dependencies": {
+    "amqplib": "^0.10.7",
+    "axios": "^1.8.4",
+    "body-parser": "^2.2.0",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.14.0",
+    "typescript": "^5.3.3"
+  }
+}
