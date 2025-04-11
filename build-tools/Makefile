@@ -3,7 +3,7 @@ ENV_FILE := .env
 WAIT_TIME ?= 5  # Default wait time is 5 seconds, can be overridden
 
 ## build: Stops and removes all running containers, builds the project, and starts docker-compose
-build:  stop_all_containers check_postgres
+build: stop_all_containers check_postgres start_order_db
 	echo "🚀 Building (when required) and starting docker images with environment variables..."
 	docker-compose up --build -d
 	echo "✅ Docker images built and started!"
@@ -104,6 +104,14 @@ check_postgres:
 		echo "PostgreSQL is not running on port 5432."; \
 	fi	
 
+
+## start_order_db: Runs the order-db.sh script and attaches it to the docker network
+start_order_db:
+	@echo "📦 Starting order-db manually via script..."
+	./order-db.sh
+	docker network inspect mynetwork >/dev/null 2>&1 || docker network create mynetwork
+	docker network connect mynetwork order-db || true
+	@echo "✅ order-db container is up and connected to 'mynetwork'"
 
 ## logs: Shows logs from all services
 logs:

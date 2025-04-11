@@ -1,11 +1,13 @@
-import { sequelize } from './config/database';  // Import Sequelize instance from config
-import { OrderModel } from './models/order';    // Import your Order model to register it with Sequelize
+// src/index.ts
+import { sequelize } from './config/database';
+import { OrderModel } from './models/order';
+import { consumeOrders } from './queues/orderConsumer';
 
-// Sync the models with the database
-sequelize.sync({ force: false })  // Set to `true` only if you want to drop tables during dev (be cautious)
-  .then(() => {
+// Sync models and start consuming messages
+sequelize.sync({ force: false })
+  .then(async () => {
     console.log('✅ Tables synced with the database');
-    // You can start other services or consumers here
+    await consumeOrders();  // Start consuming messages from RabbitMQ
   })
   .catch((error) => {
     console.error('❌ Error syncing tables:', error);
