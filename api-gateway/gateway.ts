@@ -1,4 +1,3 @@
-// src/gateway.ts
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import amqp, { Channel } from 'amqplib';
@@ -16,31 +15,56 @@ let channel: Channel;
 // Middleware
 app.use(bodyParser.json());
 
-// RabbitMQ connection setup
-const connectRabbitMQ = async (): Promise<void> => {
-  try {
-    const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
-    channel = await connection.createChannel();
-    await channel.assertQueue(QUEUE_NAME, { durable: true });
-    console.log('✅ Connected to RabbitMQ');
-  } catch (err) {
-    console.error('❌ RabbitMQ connection failed:', err);
-    process.exit(1);
+// *****Retry mechanism for RabbitMQ connection********
+const connectRabbitMQ = async (retries: number = 5, delay: number = 5000): Promise<void> => {
+  let attempt = 0;
+  while (attempt < retries) {
+    try {
+      const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
+      channel = await connection.createChannel();
+      await channel.assertQueue(QUEUE_NAME, { durable: true });
+      console.log('✅ Connected to RabbitMQ');
+      return; // Successfully connected, exit the loop...
+    } catch (err) {
+      attempt++;
+      console.error(`❌ RabbitMQ connection failed (attempt ${attempt}):`, err);
+      if (attempt < retries) {
+        console.log(`Retrying in ${delay / 1000} seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, delay)); // Wait before retry
+        delay *= 2; // Exponential backoff (increases delay on each retry)
+      } else {
+        console.error('❌ Failed to connect to RabbitMQ after several attempts.');
+        // Graceful Failure-->
+        process.exit(1); // Exit the process if unable to connect after all retries
+      }
+    }
   }
 };
 
 // POST /order route
 app.post('/order', async (req: Request, res: Response): Promise<void> => {
-  const orderData = req.body;
+  const { customerName, items, total, status } = req.body;
 
-  if (!orderData.id || !orderData.customerName || !orderData.items) {
+  // Validate the necessary fields
+  if (!customerName || !items || !total || !status) {
     res.status(400).json({ message: 'Invalid order data' });
     return;
   }
 
+  const orderData = {
+    id: `${Date.now()}`, // Generate a simple order ID based on timestamp
+    customerName,
+    items,
+    total,
+    status,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   try {
+    // Send order to RabbitMQ queue
     channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(orderData)), {
-      persistent: true,
+      persistent: true, // Ensures message is saved to disk
     });
 
     console.log('📦 Sent order to queue:', orderData.id);

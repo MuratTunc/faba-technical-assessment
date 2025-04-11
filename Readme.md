@@ -1,3 +1,20 @@
+
+## order-servis
+
+### order-service/src/queues/orderConsumer.ts
+✅ Consuming from order.create
+
+💾 Saving the order to the database
+
+📢 Publishing the order.created event to RabbitMQ
+
+
+
+
+
+-----------------------------------------------------------------------------------
+
+
 ## Correct Flow Summary:
 
 ### 1. Client sends a POST request to the API Gateway:
