@@ -1,11 +1,11 @@
 version: '3.9'
 
 services:
-  # Api-Gateway Service Definition
+  # Api-Gateway Service Definition ( User requests will first come to the api-gateway. )
   api-gateway:
     build:
-      context: ./api-gateway  # Path to the API Gateway code
-      dockerfile: ./api-gateway/api-gateway.dockerfile  # Dockerfile for API Gateway
+      context: ./../api-gateway  # Path to the API Gateway code
+      dockerfile: ./../api-gateway/api-gateway.dockerfile  # Dockerfile for API Gateway
     image: ${API_GATEWAY_SERVICE_IMAGE_NAME}
     container_name: ${API_GATEWAY_SERVICE_CONTAINER_NAME}
     restart: always
@@ -14,46 +14,30 @@ services:
     ports:
       - "${API_GATEWAY_SERVICE_PORT}:${API_GATEWAY_SERVICE_PORT}"  # Expose API Gateway's port
     env_file:
-      - ./build-tools/.env  # Provide the relative path to .env file
+      - .env  # Provide the relative path to .env file
     networks:
       - mynetwork
 
   # Order Service Definition
   order-service:
     build:
-      context: ./order-service  # Path to the order service code
-      dockerfile: ./order-service/order-service.dockerfile  # Dockerfile for Order service
+      context: ./../order-service  # Path to the order service code
+      dockerfile: ./../order-service/order-service.dockerfile  # Dockerfile for Order service
     image: ${ORDER_SERVICE_IMAGE_NAME}
     container_name: ${ORDER_SERVICE_CONTAINER_NAME}
     restart: always
     depends_on:
-      - order-db  # Wait for the order database to be healthy
       - rabbitmq  # Wait for RabbitMQ to be healthy
     ports:
       - "${ORDER_SERVICE_PORT}:${ORDER_SERVICE_PORT}"  # Expose Order service's port
     env_file:
-      - ./build-tools/.env  # Provide the relative path to .env file
-    networks:
-      - mynetwork
-
-  # Order Database Definition
-  order-db:
-    image: postgres:15  # PostgreSQL image version 15
-    container_name: ${ORDER_POSTGRES_DB_CONTAINER_NAME}
-    restart: always
+      - .env  # Provide the relative path to .env file
     environment:
-      POSTGRES_USER: ${ORDER_POSTGRES_DB_USER}
-      POSTGRES_PASSWORD: ${ORDER_POSTGRES_DB_PASSWORD}
-      POSTGRES_DB: ${ORDER_POSTGRES_DB_NAME}
-    ports:
-      - "${ORDER_POSTGRES_DB_PORT}:5432"  # Expose PostgreSQL's port
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${ORDER_POSTGRES_DB_USER}", "-d", "${ORDER_POSTGRES_DB_NAME}"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - order_db_data:/var/lib/postgresql/data  # Persistent storage
+      - DB_HOST=order-db  # Set the DB host to the name of the container from the script
+      - DB_PORT=5432
+      - DB_USER=order
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=order-db
     networks:
       - mynetwork
 
@@ -77,9 +61,8 @@ services:
     networks:
       - mynetwork
 
-# Database Volumes
+# Volumes
 volumes:
-  order_db_data:
   rabbitmq_db_data:
 
 # Networks Definition

@@ -10,13 +10,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+# Install TypeScript globally
+RUN npm install -g typescript
+
 # Copy all other files
 COPY . .
 
 # Build TypeScript
 RUN npm run build
 
-# Expose port (match your API port, e.g., 3000)
+# Expose port (API port, 3000)
 EXPOSE 3000
 
 # Start the app
