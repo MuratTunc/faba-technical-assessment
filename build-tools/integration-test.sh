@@ -33,7 +33,6 @@ show-order-db-database-table() {
   docker exec -i "$CONTAINER_ID" psql -U "$ORDER_POSTGRES_DB_USER" -d "$ORDER_POSTGRES_DB_NAME" -c "SELECT * FROM orders;"
 }
 
-
 # Function to list all running Docker containers
 list-running-containers() {
   echo "📜 Listing all running containers..."
@@ -44,8 +43,12 @@ list-running-containers() {
 ### 🚀 Send test order to /order endpoint
 echo "📤 Sending test order to /order endpoint..."
 
-RESPONSE=$(curl -s -X POST http://localhost:3000/order \
+# Generate a unique Idempotency Key (can use a UUID or timestamp)
+IDEMPOTENCY_KEY=$(date +%s%N)  # Unique key based on timestamp (nanoseconds)
+
+RESPONSE=$(curl -s -X POST http://localhost:3000/api/order \
   -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   -d '{
         "customerName": "Faba Best Company",
         "items": ["item1", "item2"],
@@ -67,7 +70,6 @@ fi
 
 # Optional DB check for order DB
 show-order-db-database-table
-
 
 # List all running containers
 list-running-containers

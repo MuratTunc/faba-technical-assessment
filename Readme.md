@@ -9,6 +9,12 @@
 📢 Publishing the order.created event to RabbitMQ
 
 
+## Idempotency
+First request without idempotency key: A key is generated, the order is processed, and the response is cached.
+
+Subsequent request with the same idempotency key: The cached response is returned without creating a duplicate order.
+
+
 
 
 
@@ -42,7 +48,7 @@
 Use the following `curl` command to send a request to the API Gateway for creating an order:
 
 ```bash
-curl -X POST http://localhost:3000/order \
+curl -X POST http://localhost:3000/api/order \
   -H "Content-Type: application/json" \
   -d '{
         "customerName": "Faba Best",

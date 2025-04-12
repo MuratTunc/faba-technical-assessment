@@ -12,6 +12,10 @@ services:
     depends_on:
       - order-service  # Wait for the order service to be available
       - rabbitmq
+      - redis
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
     ports:
       - "${API_GATEWAY_SERVICE_PORT}:${API_GATEWAY_SERVICE_PORT}"  # Expose API Gateway's port
     env_file:
@@ -91,6 +95,24 @@ services:
     networks:
       - mynetwork
 
+  
+  # Redis Service
+  redis:  # ✅ Redis Service
+    image: redis:latest
+    container_name: ${REDIS_CONTAINER_NAME}
+    restart: always
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - redis-data:/data  # ✅ Persist Redis data
+    command: [ "redis-server", "--save", "60", "1", "--loglevel", "warning" ]  # ✅ Configuring Redis persistence
+    networks:
+      - mynetwork    
+    healthcheck:  # Optional: Health check for Redis
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
   # Order Database Definition
   order-db:
     image: postgres:15  # Use the official PostgreSQL image version 15
@@ -118,6 +140,7 @@ services:
 volumes:
   order_db_data:
   rabbitmq_db_data:
+  redis-data:
 
 # Networks Definition
 networks:

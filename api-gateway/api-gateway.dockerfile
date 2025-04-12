@@ -1,26 +1,21 @@
-# api-gateway.Dockerfile
-
 # Use Node base image
 FROM node:18
 
-# Set workdir
-WORKDIR /app
+# Set working directory
+WORKDIR /usr/src/app
 
 # Copy package.json and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Install TypeScript globally
-RUN npm install -g typescript
+# Install TypeScript and ts-node globally
+RUN npm install -g typescript ts-node
 
-# Copy all other files
+# Copy the rest of the application code
 COPY . .
 
-# Build TypeScript
-RUN npm run build
-
-# Expose port (API port, 3000)
+# Expose the port for the app
 EXPOSE 3000
 
-# Start the app
-CMD ["npm", "start"]
+# Start the app using ts-node
+CMD ["ts-node", "src/index.ts"]
