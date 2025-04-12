@@ -1,11 +1,12 @@
-// src/models/inventoryModel.ts
+// src/models/inventory.ts
 import { Model, DataTypes } from 'sequelize';
-import { sequelize } from '../config/database';  
+import { sequelize } from '../config/database';
 
 interface InventoryAttributes {
   id: string;
   items: string[];
   total: number;
+  quantity: number;  // Add quantity field
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -26,6 +27,11 @@ InventoryModel.init(
     total: {
       type: DataTypes.FLOAT,
       allowNull: false,
+    },
+    quantity: {
+      type: DataTypes.INTEGER, // Add the quantity field here
+      allowNull: false,
+      defaultValue: 0, // You can set a default if necessary
     },
     createdAt: {
       type: DataTypes.DATE,

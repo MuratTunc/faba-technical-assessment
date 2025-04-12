@@ -6,7 +6,7 @@ export const sequelize = new Sequelize(
   process.env.INVENTORY_POSTGRES_DB_PASSWORD || 'inventory_password', // Default to 'inventory_password'
   {
     host: process.env.INVENTORY_POSTGRES_DB_HOST || 'inventory-db', // Default to 'inventory-db'
-    port: parseInt(process.env.INVENTORY_POSTGRES_DB_PORT || '5433', 10), // Default to 5433
+    port: 5432, // Constant port 5432
     dialect: 'postgres', // PostgreSQL
   }
 );

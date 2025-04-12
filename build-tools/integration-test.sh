@@ -21,8 +21,8 @@ echo -e "********************************************************************"
 echo -e "✅✅✅ $ORDER_SERVICE INTEGRATION TESTS START..."
 echo -e "********************************************************************"
 
-# Function to show database content (optional)
-show_database_table() {
+# Function to show order database content (optional)
+show-order-db-database-table() {
   CONTAINER_ID=$(docker ps -qf "name=$ORDER_POSTGRES_DB_CONTAINER_NAME")
 
   if [ -z "$CONTAINER_ID" ]; then
@@ -31,6 +31,25 @@ show_database_table() {
   fi
 
   docker exec -i "$CONTAINER_ID" psql -U "$ORDER_POSTGRES_DB_USER" -d "$ORDER_POSTGRES_DB_NAME" -c "SELECT * FROM orders;"
+}
+
+# Function to show inventory database content (optional)
+show-inventory-db-database-table() {
+  CONTAINER_ID=$(docker ps -qf "name=$INVENTORY_POSTGRES_DB_CONTAINER_NAME")
+
+  if [ -z "$CONTAINER_ID" ]; then
+      echo "❌ No running container found with name '$INVENTORY_POSTGRES_DB_CONTAINER_NAME'."
+      exit 1
+  fi
+
+  docker exec -i "$CONTAINER_ID" psql -U "$INVENTORY_POSTGRES_DB_USER" -d "$INVENTORY_POSTGRES_DB_NAME" -c "SELECT * FROM inventory;"
+}
+
+# Function to list all running Docker containers
+list-running-containers() {
+  echo "📜 Listing all running containers..."
+
+  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
 ### 🚀 Send test order to /order endpoint
@@ -57,9 +76,13 @@ else
   exit 1
 fi
 
-# Optional DB check
+# Optional DB check for order DB
+show-order-db-database-table
 
-show_database_table
+# Optional DB check for inventory DB (this is the new part)
+show-inventory-db-database-table
+
+# List all running containers
+list-running-containers
 
 echo -e "\n✅✅✅ ALL TESTS ARE DONE!!! ✅✅✅"
-

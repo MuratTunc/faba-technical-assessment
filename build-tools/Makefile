@@ -118,5 +118,5 @@ help:
 ## integration_test: Runs integration tests for all services
 integration_test:
 	echo "🔍 Running integration tests..."
-	./integration-test-order-service.sh
+	./integration-test.sh
 	echo "✅ Integration tests completed successfully!"

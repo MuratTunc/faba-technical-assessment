@@ -1,96 +1,94 @@
+// src/queues/inventoryConsumer.ts
+
 import amqp from 'amqplib';
-import { InventoryModel } from '../models/inventory'
+import { InventoryModel } from '../models/inventory'; // Adjust model import as needed
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
-const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';
+const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';  // Updated to correct queue name
+const INVENTORY_EXCHANGE = 'inventory-events';
+const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
-const ITEM_DECREASE_EVENT = 'item.decreased';
+const INVENTORY_UPDATED_EVENT = 'inventory.updated';
 
 async function connectToRabbitMQ() {
   try {
     const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
     const channel = await connection.createChannel();
 
-    // Assert the event queue for 'order.created' event
-    await channel.assertQueue(ORDER_CREATED_EVENT, { durable: true });
+    // Ensure both exchanges and the queue are created
+    await channel.assertQueue(INVENTORY_QUEUE, { durable: true });
+    await channel.assertExchange(ORDER_EXCHANGE, 'topic', { durable: true });
+    await channel.assertExchange(INVENTORY_EXCHANGE, 'topic', { durable: true });
 
-    // Assert the queue for 'item.decreased' event
-    await channel.assertQueue(ITEM_DECREASE_EVENT, { durable: true });
+    // Bind the queue to the order.created event from the order exchange
+    await channel.bindQueue(INVENTORY_QUEUE, ORDER_EXCHANGE, ORDER_CREATED_EVENT);
 
-    return { connection, channel };
+    return channel;
   } catch (error) {
     console.error('❌ Failed to connect to RabbitMQ:', error);
-    process.exit(1); // consider adding retry logic here
+    process.exit(1);
   }
 }
 
-export const consumeOrderCreatedEvent = async () => {
-  const { connection, channel } = await connectToRabbitMQ();
+export const consumeOrderCreated = async () => {
+  const channel = await connectToRabbitMQ();
 
-  console.log(`[🟢] Waiting for ${ORDER_CREATED_EVENT} events`);
+  console.log(`[🟢] Waiting for '${ORDER_CREATED_EVENT}' messages in '${INVENTORY_QUEUE}'`);
 
-  channel.consume(ORDER_CREATED_EVENT, async (msg) => {
+  channel.consume(INVENTORY_QUEUE, async (msg) => {
     if (msg !== null) {
       try {
-        const orderData = JSON.parse(msg.content.toString());
-        console.log('[📩] Received order:', orderData);
+        // Parse the incoming message
+        const event = JSON.parse(msg.content.toString());
+        const order = event.data;
+        console.log('📩 Received order.created event:', order);
 
-        // Loop through the items in the order to update inventory
-        for (const item of orderData.data.items) {
-          const inventoryItem = await InventoryModel.findOne({
-            where: { itemName: item },
+        // To track the updated items
+        const updatedItems: any[] = [];
+
+        for (const item of order.items) {
+          // Update inventory here - decrement the quantity
+          await InventoryModel.decrement('quantity', {
+            by: item.quantity,
+            where: { id: item.productId },  // Ensure correct field for matching
           });
 
-          if (inventoryItem) {
-            // Decrease the inventory quantity
-            inventoryItem.quantity -= 1;
-            await inventoryItem.save();
-
-            console.log(`[💾] Inventory updated for item: ${item}`);
-
-            // Publish item decrease event
-            const itemDecreasedEvent = {
-              event: ITEM_DECREASE_EVENT,
-              data: {
-                itemName: item,
-                newQuantity: inventoryItem.quantity,
-              },
-            };
-
-            channel.sendToQueue(
-              ITEM_DECREASE_EVENT,
-              Buffer.from(JSON.stringify(itemDecreasedEvent)),
-              { persistent: true }
-            );
-
-            console.log(`[📤] Published ${ITEM_DECREASE_EVENT} for ${item}`);
-          } else {
-            console.log(`[❌] Inventory item not found for: ${item}`);
-          }
+          // Add the updated item details
+          updatedItems.push({
+            productId: item.productId,
+            deducted: item.quantity,
+          });
         }
+
+        console.log('💾 Inventory updated in database');
+
+        // Prepare and publish the inventory update event
+        const inventoryUpdatedEvent = {
+          event: INVENTORY_UPDATED_EVENT,
+          data: {
+            orderId: order.id,
+            updatedItems,
+          },
+        };
+
+        // Publish to the inventory-events exchange
+        channel.publish(
+          INVENTORY_EXCHANGE,
+          INVENTORY_UPDATED_EVENT,
+          Buffer.from(JSON.stringify(inventoryUpdatedEvent)),
+          { persistent: true }
+        );
+
+        console.log(`📤 Published '${INVENTORY_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
 
         // Acknowledge the message
         channel.ack(msg);
       } catch (error) {
-        console.error('❌ Error processing order created event:', error);
-        channel.nack(msg, false, true); // requeue the message with a delay if necessary
+        console.error('❌ Error processing message:', error);
+        // Nack the message and requeue in case of an error
+        channel.nack(msg, false, true);
       }
     }
   });
-
-  // Graceful shutdown of RabbitMQ connection and channel
-  const gracefulShutdown = async () => {
-    console.log('🛑 Gracefully shutting down...');
-    await channel.close();
-    await connection.close();
-    console.log('✅ RabbitMQ connection closed');
-    process.exit(0);
-  };
-
-  process.on('SIGINT', gracefulShutdown);
-  process.on('SIGTERM', gracefulShutdown);
 };
-
-// Call the function to start listening for events
-consumeOrderCreatedEvent();
