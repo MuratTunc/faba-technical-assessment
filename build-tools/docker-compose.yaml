@@ -40,20 +40,36 @@ services:
   # Inventory Service Definition
   inventory-service:
     build:
-      context: ./../inventory-service  # Path to the order service code
-      dockerfile: ./../inventory-service/inventory-service.dockerfile  # Dockerfile for building the order service
-    image: ${INVENTORY_SERVICE_IMAGE_NAME}  # Name of the Docker image for order service
-    container_name: ${INVENTORY_SERVICE_CONTAINER_NAME}  # Container name for order service
+      context: ./../inventory-service  # Path to the service code
+      dockerfile: ./../inventory-service/inventory-service.dockerfile  # Dockerfile for building the service
+    image: ${INVENTORY_SERVICE_IMAGE_NAME}  # Name of the Docker image
+    container_name: ${INVENTORY_SERVICE_CONTAINER_NAME}  # Container name
     restart: always  # Restart the container automatically if it stops
     depends_on:
-      inventory-db:
-        condition: service_healthy  # Wait for the order database to be healthy before starting the service
+      - rabbitmq
     ports:
-      - "${INVENTORY_SERVICE_PORT}:${INVENTORY_SERVICE_PORT}"  # Map the order service port from the host to the container
+      - "${INVENTORY_SERVICE_PORT}:${INVENTORY_SERVICE_PORT}"  # Map the service port from the host to the container
     env_file:
       - .env  # Load environment variables from .env file
     networks:
-      - mynetwork  # Connect the service to the network    
+      - mynetwork  # Connect the service to the network
+
+  # Notification Service Definition
+  notification-service:
+    build:
+      context: ./../notification-service  # Path to the service code
+      dockerfile: ./../notification-service/notification-service.dockerfile  # Dockerfile for building the service
+    image: ${NOTIFICATION_SERVICE_IMAGE_NAME}  # Name of the Docker image 
+    container_name: ${NOTIFICATION_SERVICE_CONTAINER_NAME}  # Container name
+    restart: always  # Restart the container automatically if it stops
+    depends_on:
+      - rabbitmq
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"  # Map the  service port from the host to the container
+    env_file:
+      - .env  # Load environment variables from .env file
+    networks:
+      - mynetwork  # Connect the service to the network       
 
   # RabbitMQ Definition
   rabbitmq:
@@ -97,34 +113,10 @@ services:
     networks:
       - mynetwork  # Connect the service to the network
 
-  # Inventory Database Definition
-  inventory-db:
-    image: postgres:15  # Use the official PostgreSQL image version 15
-    container_name: ${INVENTORY_POSTGRES_DB_CONTAINER_NAME}  # Container name for order database
-    restart: always  # Restart the container automatically if it stops
-    environment:
-      POSTGRES_USER: ${INVENTORY_POSTGRES_DB_USER}  # PostgreSQL username
-      POSTGRES_PASSWORD: ${INVENTORY_POSTGRES_DB_PASSWORD}  # PostgreSQL password
-      POSTGRES_DB: ${INVENTORY_POSTGRES_DB_NAME}  # Name of the PostgreSQL database
-    ports:
-      - "${INVENTORY_POSTGRES_DB_PORT}:5432"  # Map PostgreSQL port from the host to the container
-    healthcheck:  # Health check to ensure PostgreSQL is ready before starting order service
-      test: ["CMD", "pg_isready", "-U", "${INVENTORY_POSTGRES_DB_USER}", "-d", "${INVENTORY_POSTGRES_DB_NAME}"]
-      interval: 15s  # Interval between checks
-      timeout: 5s  # Timeout duration
-      retries: 10  # Number of retries before considering the service as unhealthy
-    volumes:
-      - inventory_db_data:/var/lib/postgresql/data  # Persistent storage for PostgreSQL data
-      - ./init-inventory-db.sql:/docker-entrypoint-initdb.d/init-inventory-db.sql  # Mount the initialization script to create tables
-    networks:
-      - mynetwork  # Connect the service to the network    
-
-
 
 # Volumes
 volumes:
   order_db_data:
-  inventory_db_data:
   rabbitmq_db_data:
 
 # Networks Definition

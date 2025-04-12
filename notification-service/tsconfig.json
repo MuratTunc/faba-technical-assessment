@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+      "target": "ES6",                          // Modern JavaScript output
+      "module": "commonjs",                     // Needed for Node.js compatibility
+      "outDir": "./dist",                       // Compiled JS goes here
+      "rootDir": "./src",                       // Your source files live here
+      "esModuleInterop": true,                  // Allows import of CommonJS modules like amqplib
+      "skipLibCheck": true,                     // Speeds up build by skipping type checks on node_modules
+      "forceConsistentCasingInFileNames": true, // Avoids case-sensitive import issues
+      "resolveJsonModule": true,                // Lets you import `.json` files
+      "strict": true,                           // Enables all strict type checks (good for catching bugs early)
+      "moduleResolution": "node"                // Tells TypeScript how to resolve modules (needed for Node.js)
+    },
+    "include": ["src/**/*.ts"],                 // Include all TypeScript files in `src/`
+    "exclude": ["node_modules", "**/*.test.ts"] // Ignore dependencies and test files
+  }
+  

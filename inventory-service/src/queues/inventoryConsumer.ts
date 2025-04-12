@@ -1,7 +1,10 @@
-// src/queues/inventoryConsumer.ts
-
 import amqp from 'amqplib';
-import { InventoryModel } from '../models/inventory'; // Adjust model import as needed
+
+// Define an interface for the item structure
+interface OrderItem {
+  productId: string;  // Assuming productId is a string, change type if needed
+  quantity: number;   // Assuming quantity is a number, change type if needed
+}
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
@@ -9,7 +12,7 @@ const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';  // Upd
 const INVENTORY_EXCHANGE = 'inventory-events';
 const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
-const INVENTORY_UPDATED_EVENT = 'inventory.updated';
+const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated'; // Updated event name
 
 async function connectToRabbitMQ() {
   try {
@@ -44,43 +47,28 @@ export const consumeOrderCreated = async () => {
         const order = event.data;
         console.log('📩 Received order.created event:', order);
 
-        // To track the updated items
-        const updatedItems: any[] = [];
-
-        for (const item of order.items) {
-          // Update inventory here - decrement the quantity
-          await InventoryModel.decrement('quantity', {
-            by: item.quantity,
-            where: { id: item.productId },  // Ensure correct field for matching
-          });
-
-          // Add the updated item details
-          updatedItems.push({
-            productId: item.productId,
-            deducted: item.quantity,
-          });
-        }
-
-        console.log('💾 Inventory updated in database');
-
-        // Prepare and publish the inventory update event
-        const inventoryUpdatedEvent = {
-          event: INVENTORY_UPDATED_EVENT,
+        // Prepare and publish the inventory status update event
+        const inventoryStatusUpdatedEvent = {
+          event: INVENTORY_STATUS_UPDATED_EVENT, // Changed to 'inventory.status.updated'
           data: {
             orderId: order.id,
-            updatedItems,
+            // You can still include the items in the updated event if needed
+            updatedItems: order.items.map((item: OrderItem) => ({  // Type the 'item' parameter
+              productId: item.productId,
+              deducted: item.quantity,
+            })),
           },
         };
 
         // Publish to the inventory-events exchange
         channel.publish(
           INVENTORY_EXCHANGE,
-          INVENTORY_UPDATED_EVENT,
-          Buffer.from(JSON.stringify(inventoryUpdatedEvent)),
+          INVENTORY_STATUS_UPDATED_EVENT, // Updated event name
+          Buffer.from(JSON.stringify(inventoryStatusUpdatedEvent)),
           { persistent: true }
         );
 
-        console.log(`📤 Published '${INVENTORY_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
+        console.log(`📤 Published '${INVENTORY_STATUS_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
 
         // Acknowledge the message
         channel.ack(msg);
