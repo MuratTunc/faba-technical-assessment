@@ -1,32 +1,12 @@
-// src/queues/orderConsumer.ts
-
-import amqp from 'amqplib';
+import { connectToRabbitMQ } from '../services/rabbitmqService'; // Import from the new service file
 import { OrderModel } from '../models/order';
 
-const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
-const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
 const ORDER_QUEUE = process.env.ORDER_QUEUE || 'orderQueue';
+const DLQ_QUEUE = process.env.DLQ_QUEUE || 'orderQueue_DLQ';  // Define the DLQ queue name
 const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
 
-async function connectToRabbitMQ() {
-  try {
-    const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
-    const channel = await connection.createChannel();
-
-    // Assert the order queue for consuming new orders
-    await channel.assertQueue(ORDER_QUEUE, { durable: true });
-
-    // Assert a topic exchange for publishing events
-    await channel.assertExchange(ORDER_EXCHANGE, 'topic', { durable: true });
-
-    return channel;
-  } catch (error) {
-    console.error('❌ Failed to connect to RabbitMQ:', error);
-    process.exit(1);
-  }
-}
-
+// Consume the normal order queue
 export const consumeOrders = async () => {
   const channel = await connectToRabbitMQ();
 
@@ -67,6 +47,53 @@ export const consumeOrders = async () => {
       } catch (error) {
         console.error('❌ Error processing message:', error);
         channel.nack(msg, false, true); // Requeue message
+      }
+    }
+  });
+};
+
+// Consume messages from the DLQ (Dead Letter Queue)
+export const consumeDLQ = async () => {
+  const channel = await connectToRabbitMQ();
+
+  console.log(`[🟠] Waiting for messages in DLQ: ${DLQ_QUEUE}`);
+
+  channel.consume(DLQ_QUEUE, async (msg) => {
+    if (msg !== null) {
+      try {
+        const order = JSON.parse(msg.content.toString());
+        console.log('📩 Received order from DLQ:', order);
+
+        // Handle order processing here like in consumeOrders
+        const savedOrder = await OrderModel.create({
+          id: order.id,
+          customerName: order.customerName,
+          items: order.items,
+          total: order.total,
+          status: order.status,
+        });
+
+        console.log('💾 Order saved to database from DLQ');
+
+        const orderCreatedEvent = {
+          event: ORDER_CREATED_EVENT,
+          data: savedOrder.toJSON(),
+        };
+
+        // Publish to the exchange with routing key 'order.created'
+        channel.publish(
+          ORDER_EXCHANGE,
+          ORDER_CREATED_EVENT,
+          Buffer.from(JSON.stringify(orderCreatedEvent)),
+          { persistent: true }
+        );
+
+        console.log(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}' from DLQ`);
+
+        channel.ack(msg);
+      } catch (error) {
+        console.error('❌ Error processing DLQ message:', error);
+        channel.nack(msg, false, true); // Requeue message or handle failure differently
       }
     }
   });
