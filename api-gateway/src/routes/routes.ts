@@ -1,7 +1,7 @@
-// api-gateway/src/routes/routes.ts
 import { Router, Request, Response, NextFunction } from 'express';
 import { Channel } from 'amqplib';
 import { idempotencyMiddleware, cacheResponse } from '../middleware/idempotencyMiddleware';
+import logger from '../utils/logger';  // Importing your winston logger
 
 export const orderRoute = (channel: Channel): Router => {
   const router = Router();
@@ -11,6 +11,7 @@ export const orderRoute = (channel: Channel): Router => {
     const { customerName, items, total, status } = req.body;
 
     if (!customerName || !items || !total || !status) {
+      logger.warn('❌ Invalid order data: Missing customerName, items, total, or status');
       res.status(400).json({ message: 'Invalid order data' });
       return;
     }
@@ -35,13 +36,13 @@ export const orderRoute = (channel: Channel): Router => {
       const idempotencyKey = (req as any).idempotencyKey;
       await cacheResponse(idempotencyKey, { message: 'Order created', orderId: orderData.id });
 
-      console.log('📦 Order sent:', orderData.id);
+      logger.info(`📦 Order sent: ${orderData.id} for customer: ${customerName}`);
       res.status(200).json({ message: 'Order created successfully!', orderId: orderData.id });
 
       // You should not return the response in an async function. Instead, you just complete the request/response cycle.
       next(); // This would allow handling other middlewares or error handling if necessary.
     } catch (err) {
-      console.error('❌ Failed to send order:', err);
+      logger.error(`❌ Failed to send order: ${err}`);
       res.status(500).json({ message: 'Failed to create order' });
     }
   });

@@ -1,11 +1,11 @@
-// src/index.ts
 import { consumeInventoryStatusUpdated } from './queues/notificationConsumer';
+import logger from './utils/logger';  // Importing the logger
 
 // Start consuming 'inventory.status.updated' messages from RabbitMQ
 consumeInventoryStatusUpdated()
   .then(() => {
-    console.log('✅ Started consuming inventory.status.updated messages');
+    logger.info('✅ Started consuming inventory.status.updated messages');
   })
   .catch((error) => {
-    console.error('❌ Error starting the consumer:', error);
+    logger.error('❌ Error starting the consumer:', error);
   });

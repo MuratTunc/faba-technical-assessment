@@ -33,45 +33,67 @@ show-order-db-database-table() {
   docker exec -i "$CONTAINER_ID" psql -U "$ORDER_POSTGRES_DB_USER" -d "$ORDER_POSTGRES_DB_NAME" -c "SELECT * FROM orders;"
 }
 
-# Function to list all running Docker containers
+# Function to list all running Docker containers and show logs
 list-running-containers() {
-  echo "📜 Listing all running containers..."
+  echo "📜 Listing all running containers and showing logs..."
+  
+  # Get the names of all running containers
+  CONTAINER_NAMES=$(docker ps --format "{{.Names}}")
 
-  docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  # Loop through each container name and fetch logs
+  for CONTAINER_NAME in $CONTAINER_NAMES; do
+    echo -e "\n\033[32m📝 Logs for container: $CONTAINER_NAME\033[0m"  # Prints in green
+    docker logs "$CONTAINER_NAME"  # Show logs for the container
+  done
 }
 
-### 🚀 Send test order to /order endpoint
-echo "📤 Sending test order to /order endpoint..."
+
+# Function to send a POST request to the /order endpoint
+send_post_request() {
+  local url=$1
+  local idempotency_key=$2
+  local payload=$3
+  
+  echo "📤 Sending test order to $url endpoint..."
+
+  RESPONSE=$(curl -s -X POST "$url" \
+    -H "Content-Type: application/json" \
+    -H "Idempotency-Key: $idempotency_key" \
+    -d "$payload")
+
+  echo "🔍 Raw response: $RESPONSE"
+
+  # Parse message from JSON
+  MESSAGE=$(echo "$RESPONSE" | jq -r '.message')
+
+  if [ "$MESSAGE" == "Order created successfully!" ]; then
+    echo "✅ Order creation response is correct!"
+  else
+    echo "❌ Unexpected response: $MESSAGE"
+    exit 1
+  fi
+}
+
+### 🚀 Test Order Creation
 
 # Generate a unique Idempotency Key (can use a UUID or timestamp)
 IDEMPOTENCY_KEY=$(date +%s%N)  # Unique key based on timestamp (nanoseconds)
 
-RESPONSE=$(curl -s -X POST http://localhost:3000/api/order \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
-  -d '{
-        "customerName": "Faba Best Company",
-        "items": ["item1", "item2"],
-        "total": 99.99,
-        "status": "pending"
-      }')
+# Order payload
+ORDER_PAYLOAD='{
+  "customerName": "Faba Thinks",
+  "items": ["item10", "item22"],
+  "total": 99.99,
+  "status": "pending"
+}'
 
-echo "🔍 Raw response: $RESPONSE"
-
-# Parse message from JSON
-MESSAGE=$(echo "$RESPONSE" | jq -r '.message')
-
-if [ "$MESSAGE" == "Order created successfully!" ]; then
-  echo "✅ Order creation response is correct!"
-else
-  echo "❌ Unexpected response: $MESSAGE"
-  exit 1
-fi
+# Call the send_post_request function
+send_post_request "http://localhost:3000/api/order" "$IDEMPOTENCY_KEY" "$ORDER_PAYLOAD"
 
 # Optional DB check for order DB
 show-order-db-database-table
 
-# List all running containers
+# List all running containers and show logs
 list-running-containers
 
 echo -e "\n✅✅✅ ALL TESTS ARE DONE!!! ✅✅✅"
