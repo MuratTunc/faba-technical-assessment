@@ -1,19 +1,24 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { Channel } from 'amqplib';
 import { idempotencyMiddleware, cacheResponse } from '../middleware/idempotencyMiddleware';
-import logger from '../utils/logger';  // Importing your winston logger
+import logger from '../utils/logger';
+import { CustomError } from '../utils/custom-error';
 
 export const orderRoute = (channel: Channel): Router => {
   const router = Router();
 
-  // POST /order route
   router.post('/order', idempotencyMiddleware, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const { customerName, items, total, status } = req.body;
 
+    // ✅ Validate request
     if (!customerName || !items || !total || !status) {
-      logger.warn('❌ Invalid order data: Missing customerName, items, total, or status');
-      res.status(400).json({ message: 'Invalid order data' });
-      return;
+      const error = new CustomError(
+        'ORDER_VALIDATION_FAILED',
+        'Missing customerName, items, total, or status',
+        400
+      );
+      logger.warn(`❌ ${error.code}: ${error.message}`);
+      return next(error); // Delegate to centralized error handler
     }
 
     const orderData = {
@@ -27,7 +32,7 @@ export const orderRoute = (channel: Channel): Router => {
     };
 
     try {
-      // Send order to RabbitMQ queue
+      // Send order to RabbitMQ
       channel.sendToQueue('orderQueue', Buffer.from(JSON.stringify(orderData)), {
         persistent: true,
       });
@@ -39,11 +44,13 @@ export const orderRoute = (channel: Channel): Router => {
       logger.info(`📦 Order sent: ${orderData.id} for customer: ${customerName}`);
       res.status(200).json({ message: 'Order created successfully!', orderId: orderData.id });
 
-      // You should not return the response in an async function. Instead, you just complete the request/response cycle.
-      next(); // This would allow handling other middlewares or error handling if necessary.
-    } catch (err) {
-      logger.error(`❌ Failed to send order: ${err}`);
-      res.status(500).json({ message: 'Failed to create order' });
+    } catch (err: any) {
+      logger.error(`❌ ORDER_CREATION_FAILED: ${err.message}`, { stack: err.stack });
+      return next(
+        new CustomError('ORDER_CREATION_FAILED', 'Failed to create order', 500, {
+          reason: err.message,
+        })
+      );
     }
   });
 

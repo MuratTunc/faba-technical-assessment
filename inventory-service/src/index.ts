@@ -1,11 +1,11 @@
-// src/index.ts
 import { consumeOrderCreated } from './queues/inventoryConsumer';
+import logger from './utils/logger';  // Import the custom logger utility
 
 // Start consuming 'order.created' messages from RabbitMQ
 consumeOrderCreated()
   .then(() => {
-    console.log('✅ Started consuming order.created messages');
+    logger.info('✅ Started consuming order.created messages');
   })
   .catch((error) => {
-    console.error('❌ Error starting the consumer:', error);
+    logger.error('❌ Error starting the consumer:', error);
   });

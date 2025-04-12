@@ -1,5 +1,5 @@
 import { connectToRabbitMQ } from '../services/rabbitmqService';  // Import the function from rabbitmqService
-import logger from '../utils/logger';  // Import the logger utility
+import logger from '../utils/logger';
 
 // Define the event names
 const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated';
@@ -12,7 +12,7 @@ const INVENTORY_EXCHANGE = 'inventory-events';  // Exchange for inventory events
 export const consumeInventoryStatusUpdated = async () => {
   const channel = await connectToRabbitMQ(NOTIFICATION_QUEUE, INVENTORY_EXCHANGE, INVENTORY_STATUS_UPDATED_EVENT); // Using the imported function
 
-  logger.info(`[🟢] Waiting for '${INVENTORY_STATUS_UPDATED_EVENT}' messages in '${NOTIFICATION_QUEUE}'`);
+  logger.info(`Waiting for '${INVENTORY_STATUS_UPDATED_EVENT}' messages in '${NOTIFICATION_QUEUE}'`);
 
   channel.consume(NOTIFICATION_QUEUE, async (msg) => {
     if (msg !== null) {

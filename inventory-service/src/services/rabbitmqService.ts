@@ -1,5 +1,6 @@
 import amqp from 'amqplib';
 import logger from '../utils/logger';  // Import the logger utility
+import { CustomError } from '../utils/custom-error'; // Import your custom error class
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
@@ -11,7 +12,7 @@ const ORDER_CREATED_EVENT = 'order.created';
 
 export async function connectToRabbitMQ() {
   try {
-    logger.info(`🔗 Connecting to RabbitMQ at ${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
+    logger.info(`Connecting to RabbitMQ at ${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
 
     const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
     const channel = await connection.createChannel();
@@ -34,6 +35,11 @@ export async function connectToRabbitMQ() {
     return channel;
   } catch (error) {
     logger.error('❌ Failed to connect to RabbitMQ:', error);
-    process.exit(1);
+    throw new CustomError(
+      'RABBITMQ_CONNECTION_FAILED',
+      'Failed to connect to RabbitMQ',
+      500,
+      { host: RABBITMQ_HOST, port: RABBITMQ_PORT }
+    );
   }
 }

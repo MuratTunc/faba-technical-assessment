@@ -1,55 +1,60 @@
 import { createClient } from 'redis';
 import { Request, Response, NextFunction } from 'express';
-import logger from '../utils/logger';  // Assuming you have a logger utility
+import logger from '../utils/logger';
 
-const client = createClient({
-  url: 'redis://redis:6379'
+const IDEMPOTENCY_TTL = 300; // 5 minutes in seconds
+
+// 🚀 Initialize Redis client
+const redisClient = createClient({ url: 'redis://redis:6379' });
+
+redisClient.connect().then(() => {
+  logger.info('🔗 Connected to Redis');
+}).catch((error) => {
+  logger.error('❌ Failed to connect to Redis:', error);
+  process.exit(1);  // Don't continue without Redis
 });
 
-client.connect().catch((error) => {
-  console.error('❌ Failed to connect to Redis:', error);
-  process.exit(1);  // Ensure the app does not run without Redis
-});
-
-export const idempotencyMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// 🔁 Middleware for handling idempotent requests
+export const idempotencyMiddleware = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   const idempotencyKey = req.headers['idempotency-key'] as string;
 
   if (!idempotencyKey) {
-    res.status(400).json({ message: 'Missing Idempotency-Key header' });
     logger.warn('❌ Missing Idempotency-Key header');
+    res.status(400).json({ message: 'Missing Idempotency-Key header' });
     return;
   }
 
   try {
-    // Check if the response for this idempotency key is cached
-    const cachedResponse = await client.get(idempotencyKey);
+    const cached = await redisClient.get(idempotencyKey);
 
-    if (cachedResponse) {
-      logger.info(`🔁 Duplicate request detected for key: ${idempotencyKey}. Returning cached response.`);
-      res.status(409).json({ message: 'Duplicate request', data: JSON.parse(cachedResponse) });
+    if (cached && cached !== '{"status":"processing"}') {
+      logger.info(`🔁 Duplicate request for key: ${idempotencyKey}`);
+      res.status(409).json({ message: 'Duplicate request', data: JSON.parse(cached) });
       return;
     }
 
-    // Cache the processing state for the idempotency key
-    await client.set(idempotencyKey, JSON.stringify({ status: 'processing' }), { EX: 300 });
-    (req as any).idempotencyKey = idempotencyKey;
+    // Save processing state
+    await redisClient.set(idempotencyKey, JSON.stringify({ status: 'processing' }), { EX: IDEMPOTENCY_TTL });
 
-    logger.info(`✔️ Proceeding with request for key: ${idempotencyKey}`);
+    (req as any).idempotencyKey = idempotencyKey;
+    logger.info(`🧭 Proceeding with idempotent request: ${idempotencyKey}`);
     next();
   } catch (err) {
-    console.error('❌ Redis error:', err);
-    logger.error('❌ Redis error:', err);
-    res.status(500).json({ message: 'Internal Server Error' });
+    logger.error('❌ Redis error during idempotency check:', err);
+    res.status(500).json({ message: 'Internal Server Error (Redis)' });
   }
 };
 
-// Function to cache responses for successful requests
-export const cacheResponse = async (key: string, data: any) => {
+// 📦 Utility to cache response data
+export const cacheResponse = async (key: string, data: any): Promise<void> => {
   try {
-    await client.set(key, JSON.stringify(data), { EX: 300 });
-    logger.info(`✔️ Cached response for key: ${key}`);
+    await redisClient.set(key, JSON.stringify(data), { EX: IDEMPOTENCY_TTL });
+    logger.info(`✅ Cached response for key: ${key}`);
   } catch (err) {
-    console.error('❌ Error caching response:', err);
-    logger.error('❌ Error caching response:', err);
+    logger.error('❌ Failed to cache response:', err);
   }
 };
