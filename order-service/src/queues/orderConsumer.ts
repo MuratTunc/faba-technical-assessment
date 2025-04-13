@@ -4,13 +4,15 @@ import logger from '../utils/logger';
 
 const ORDER_QUEUE = process.env.ORDER_QUEUE || 'orderQueue';
 const DLQ_QUEUE = process.env.DLQ_QUEUE || 'orderQueue_DLQ';
-
 const CANCEL_QUEUE = process.env.ORDER_CANCEL_QUEUE || 'orderCancelQueue';
 const CANCEL_DLQ = process.env.ORDER_CANCEL_DLQ || 'orderCancelQueue_DLQ';
 
 const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
 const ORDER_CANCELLED_EVENT = 'order.cancelled';
+
+// Versioning: Start with v1 for all events
+const EVENT_VERSION = 'v1';
 
 export const consumeOrders = async () => {
   const channel = await connectToRabbitMQ();
@@ -33,8 +35,10 @@ export const consumeOrders = async () => {
 
         logger.info('💾 Order saved to database');
 
+        // Publish the order created event with version info
         const orderCreatedEvent = {
           event: ORDER_CREATED_EVENT,
+          version: EVENT_VERSION,
           data: savedOrder.toJSON(),
         };
 
@@ -45,7 +49,7 @@ export const consumeOrders = async () => {
           { persistent: true }
         );
 
-        logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}'`);
+        logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}' with version ${EVENT_VERSION}`);
         channel.ack(msg);
       } catch (error) {
         logger.error('❌ Error processing message:', error);
@@ -76,8 +80,10 @@ export const consumeDLQ = async () => {
 
         logger.info('💾 Order saved to database from DLQ');
 
+        // Publish the order created event with version info
         const orderCreatedEvent = {
           event: ORDER_CREATED_EVENT,
+          version: EVENT_VERSION,
           data: savedOrder.toJSON(),
         };
 
@@ -88,7 +94,7 @@ export const consumeDLQ = async () => {
           { persistent: true }
         );
 
-        logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}' from DLQ`);
+        logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}' from DLQ with version ${EVENT_VERSION}`);
         channel.ack(msg);
       } catch (error) {
         logger.error('❌ Error processing DLQ message:', error);
@@ -112,8 +118,10 @@ export const consumeCancelOrders = async () => {
         // TODO: Add logic to update DB order status if needed
         // await OrderModel.update({ status: 'cancelled' }, { where: { id: cancelData.orderId } });
 
+        // Publish the cancel event with version info
         const cancelEvent = {
           event: ORDER_CANCELLED_EVENT,
+          version: EVENT_VERSION,
           data: cancelData,
         };
 
@@ -124,7 +132,7 @@ export const consumeCancelOrders = async () => {
           { persistent: true }
         );
 
-        logger.info(`📤 Published '${ORDER_CANCELLED_EVENT}' event to '${ORDER_EXCHANGE}'`);
+        logger.info(`📤 Published '${ORDER_CANCELLED_EVENT}' event to '${ORDER_EXCHANGE}' with version ${EVENT_VERSION}`);
         channel.ack(msg);
       } catch (error) {
         logger.error('❌ Error processing cancellation message:', error);

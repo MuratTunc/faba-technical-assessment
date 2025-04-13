@@ -2,10 +2,14 @@ import { connectToRabbitMQ } from '../services/rabbitmqService';
 import logger from '../utils/logger';
 import { CustomError } from '../utils/custom-error'; // Import your custom error class
 
+// Define the queue and exchange names
 const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';
 const INVENTORY_EXCHANGE = 'inventory-events';
 const ORDER_CREATED_EVENT = 'order.created';
 const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated';
+
+// You can set the version dynamically via environment variable or another method
+const EVENT_VERSION = 'v1';
 
 export const consumeOrderCreated = async () => {
   const channel = await connectToRabbitMQ();
@@ -29,14 +33,24 @@ export const consumeOrderCreated = async () => {
 
         logger.info('📩 Received order.created event:', order);
 
+        // Parametric versioning applied here
+        const orderCreatedEvent = {
+          event: ORDER_CREATED_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
+          data: order,
+        };
+
+        // Process inventory update event with dynamic version
         const inventoryStatusUpdatedEvent = {
           event: INVENTORY_STATUS_UPDATED_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
           data: {
             orderId: order.id,
             message: `Inventory checked or placeholder update for order ${order.id}.`,
           },
         };
 
+        // Publish the updated event with dynamic version
         channel.publish(
           INVENTORY_EXCHANGE,
           INVENTORY_STATUS_UPDATED_EVENT,
@@ -46,6 +60,7 @@ export const consumeOrderCreated = async () => {
 
         logger.info(`📤 Published '${INVENTORY_STATUS_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
 
+        // Acknowledge the message
         channel.ack(msg);
       } catch (error: any) {
         if (error instanceof CustomError) {
@@ -57,6 +72,7 @@ export const consumeOrderCreated = async () => {
           logger.error('❌ Unhandled error:', error);
         }
 
+        // Requeue the message in case of error
         channel.nack(msg, false, true); // Requeue the message
       }
     }

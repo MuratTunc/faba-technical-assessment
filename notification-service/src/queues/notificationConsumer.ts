@@ -9,6 +9,9 @@ const NOTIFICATION_SENT_EVENT = 'notification.sent';  // The event to be publish
 const NOTIFICATION_QUEUE = process.env.NOTIFICATION_QUEUE || 'notificationQueue';  // The queue for notification events
 const INVENTORY_EXCHANGE = 'inventory-events';  // Exchange for inventory events
 
+
+const EVENT_VERSION = 'v1';
+
 export const consumeInventoryStatusUpdated = async () => {
   // Connect to RabbitMQ and bind the queue to listen for inventory.status.updated events
   const channel = await connectToRabbitMQ(NOTIFICATION_QUEUE, INVENTORY_EXCHANGE, INVENTORY_STATUS_UPDATED_EVENT);
@@ -22,9 +25,10 @@ export const consumeInventoryStatusUpdated = async () => {
         const event = JSON.parse(msg.content.toString());
         logger.info('📩 Received inventory.status.updated event:', event);
 
-        // Prepare the notification.sent event payload
+        // Prepare the notification.sent event payload with parametric versioning
         const notificationSentEvent = {
           event: NOTIFICATION_SENT_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
           data: {
             message: `Inventory has been updated for order ${event.data.orderId}.`
           },
