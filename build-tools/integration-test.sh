@@ -63,40 +63,88 @@ send_post_request() {
   # Parse message from JSON
   MESSAGE=$(echo "$RESPONSE" | jq -r '.message')
   
-  if [ "$MESSAGE" == "Order created successfully!" ]; then
+  # Extract order ID from the response
+  ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId')
+  echo "📦 Extracted Order ID: $ORDER_ID"
+
+  if [ "$MESSAGE" == "Order created successfully!" ] && [ "$ORDER_ID" != "null" ]; then
     echo "✅ Order creation response is correct!"
   else
     echo "❌ Unexpected response: $MESSAGE"
+    exit 1
+  fi
+
+  # Export for access in main flow
+  export CREATED_ORDER_ID="$ORDER_ID"
+}
+
+# Function to send a POST request to /order-cancel using created orderId
+send_cancel_request() {
+  local order_id=$1
+  local cancel_url="http://localhost:3000/api/order-cancel"
+  local cancel_idempotency_key="cancel-$IDEMPOTENCY_KEY"
+  
+  CANCEL_PAYLOAD=$(jq -n \
+    --arg orderId "$order_id" \
+    --arg reason "Testing cancellation" \
+    '{orderId: $orderId, reason: $reason}')
+
+  echo "📤 Sending order cancellation for orderId: $order_id..."
+
+  CANCEL_RESPONSE=$(curl -s -X POST "$cancel_url" \
+    -H "Content-Type: application/json" \
+    -H "Idempotency-Key: $cancel_idempotency_key" \
+    -d "$CANCEL_PAYLOAD")
+
+  echo "🔍 Raw cancel response: $CANCEL_RESPONSE"
+
+  CANCEL_MESSAGE=$(echo "$CANCEL_RESPONSE" | jq -r '.message')
+
+  if [ "$CANCEL_MESSAGE" == "Order cancellation requested" ]; then
+    echo "✅ Order cancel response is correct!"
+  else
+    echo "❌ Unexpected cancel response: $CANCEL_MESSAGE"
     exit 1
   fi
 }
 
 ### 🚀 Test Order Creation
 
-# Generate a unique Idempotency Key (using nanosecond timestamp)
-IDEMPOTENCY_KEY=$(date +%s%N)
-
-# Order payload updated: using "item" (singular) instead of "items"
+# -----------------------------------------------------------------------------------------#
 ORDER_PAYLOAD='{
   "customerName": "Faba Thinks",
-  "item": "item10",
+  "item": "item105",
   "total": 99.99,
   "status": "pending"
 }'
-
-# Call the send_post_request function with the new endpoint and payload
+IDEMPOTENCY_KEY=$(date +%s%N) # Generate a unique Idempotency Key (using nanosecond timestamp)
 send_post_request "http://localhost:3000/api/order-create" "$IDEMPOTENCY_KEY" "$ORDER_PAYLOAD"
+show-order-db-database-table
+# -----------------------------------------------------------------------------------------#
 
-# Optional DB check for order DB
+
+
+# -----------------------------------------------------------------------------------------#
+ORDER_PAYLOAD='{
+  "customerName": "Faba Thinks Twice",
+  "item": "item101",
+  "total": 99.99,
+  "status": "pending"
+}'
+IDEMPOTENCY_KEY=$(date +%s%N)
+send_post_request "http://localhost:3000/api/order-create" "$IDEMPOTENCY_KEY" "$ORDER_PAYLOAD"
+show-order-db-database-table
+# -----------------------------------------------------------------------------------------#
+
+
+
+send_cancel_request "$CREATED_ORDER_ID"
 show-order-db-database-table
 
+
+
+
 # List all running containers and show logs
-list-running-containers
+# list-running-containers
 
 echo -e "\n✅✅✅ ALL TESTS ARE DONE!!! ✅✅✅"
-
-# -----------------------------------------------------------------------------
-# Note: If the orders table is still empty, you might need to drop the old 
-# database volume (e.g., build-tools_order_db_data) so that the updated schema
-# (with the "item" column) is created.
-# -----------------------------------------------------------------------------

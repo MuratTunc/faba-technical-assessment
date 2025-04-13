@@ -1,13 +1,17 @@
-import { connectToRabbitMQ } from '../services/rabbitmqService'; // Import from the new service file
+import { connectToRabbitMQ } from '../services/rabbitmqService';
 import { OrderModel } from '../models/order';
-import logger from '../utils/logger'; // Import the logger utility
+import logger from '../utils/logger';
 
 const ORDER_QUEUE = process.env.ORDER_QUEUE || 'orderQueue';
-const DLQ_QUEUE = process.env.DLQ_QUEUE || 'orderQueue_DLQ';  // Define the DLQ queue name
+const DLQ_QUEUE = process.env.DLQ_QUEUE || 'orderQueue_DLQ';
+
+const CANCEL_QUEUE = process.env.ORDER_CANCEL_QUEUE || 'orderCancelQueue';
+const CANCEL_DLQ = process.env.ORDER_CANCEL_DLQ || 'orderCancelQueue_DLQ';
+
 const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
+const ORDER_CANCELLED_EVENT = 'order.cancelled';
 
-// Consume the normal order queue
 export const consumeOrders = async () => {
   const channel = await connectToRabbitMQ();
 
@@ -34,7 +38,6 @@ export const consumeOrders = async () => {
           data: savedOrder.toJSON(),
         };
 
-        // Publish to the exchange with routing key 'order.created'
         channel.publish(
           ORDER_EXCHANGE,
           ORDER_CREATED_EVENT,
@@ -43,17 +46,14 @@ export const consumeOrders = async () => {
         );
 
         logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}'`);
-
         channel.ack(msg);
       } catch (error) {
         logger.error('❌ Error processing message:', error);
-        channel.nack(msg, false, true); // Requeue message
+        channel.nack(msg, false, true);
       }
     }
   });
 };
-
-// Consume messages from the DLQ (Dead Letter Queue)
 
 export const consumeDLQ = async () => {
   const channel = await connectToRabbitMQ();
@@ -66,7 +66,6 @@ export const consumeDLQ = async () => {
         const order = JSON.parse(msg.content.toString());
         logger.info('📩 Received order from DLQ:', order);
 
-        // Handle order processing here like in consumeOrders
         const savedOrder = await OrderModel.create({
           id: order.id,
           customerName: order.customerName,
@@ -82,7 +81,6 @@ export const consumeDLQ = async () => {
           data: savedOrder.toJSON(),
         };
 
-        // Publish to the exchange with routing key 'order.created'
         channel.publish(
           ORDER_EXCHANGE,
           ORDER_CREATED_EVENT,
@@ -91,11 +89,67 @@ export const consumeDLQ = async () => {
         );
 
         logger.info(`📤 Published '${ORDER_CREATED_EVENT}' event to '${ORDER_EXCHANGE}' from DLQ`);
-
         channel.ack(msg);
       } catch (error) {
         logger.error('❌ Error processing DLQ message:', error);
-        channel.nack(msg, false, true); // Requeue message or handle failure differently
+        channel.nack(msg, false, true);
+      }
+    }
+  });
+};
+
+export const consumeCancelOrders = async () => {
+  const channel = await connectToRabbitMQ();
+
+  logger.info(`[🛑] Waiting for messages in ${CANCEL_QUEUE}`);
+
+  channel.consume(CANCEL_QUEUE, async (msg) => {
+    if (msg !== null) {
+      try {
+        const cancelData = JSON.parse(msg.content.toString());
+        logger.info(`📩 Received cancellation request:`, cancelData);
+
+        // TODO: Add logic to update DB order status if needed
+        // await OrderModel.update({ status: 'cancelled' }, { where: { id: cancelData.orderId } });
+
+        const cancelEvent = {
+          event: ORDER_CANCELLED_EVENT,
+          data: cancelData,
+        };
+
+        channel.publish(
+          ORDER_EXCHANGE,
+          ORDER_CANCELLED_EVENT,
+          Buffer.from(JSON.stringify(cancelEvent)),
+          { persistent: true }
+        );
+
+        logger.info(`📤 Published '${ORDER_CANCELLED_EVENT}' event to '${ORDER_EXCHANGE}'`);
+        channel.ack(msg);
+      } catch (error) {
+        logger.error('❌ Error processing cancellation message:', error);
+        channel.nack(msg, false, true);
+      }
+    }
+  });
+};
+
+export const consumeCancelDLQ = async () => {
+  const channel = await connectToRabbitMQ();
+
+  logger.info(`[🔴] Waiting for messages in DLQ: ${CANCEL_DLQ}`);
+
+  channel.consume(CANCEL_DLQ, async (msg) => {
+    if (msg !== null) {
+      try {
+        const cancelData = JSON.parse(msg.content.toString());
+        logger.warn(`🚨 Received order cancel from DLQ:`, cancelData);
+
+        // You may decide to store this or alert someone
+        channel.ack(msg);
+      } catch (error) {
+        logger.error('❌ Error processing cancel DLQ message:', error);
+        channel.nack(msg, false, true);
       }
     }
   });

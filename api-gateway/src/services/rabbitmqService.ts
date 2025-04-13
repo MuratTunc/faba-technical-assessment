@@ -2,8 +2,10 @@ import amqp, { Channel } from 'amqplib';
 
 const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
 const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
-const QUEUE_NAME = process.env.ORDER_QUEUE || 'orderQueue';
+const ORDER_QUEUE_NAME = process.env.ORDER_QUEUE || 'orderQueue';
+const ORDER_CANCEL_QUEUE_NAME = process.env.ORDER_CANCEL_QUEUE || 'orderCancelQueue';
 const DLQ_NAME = process.env.ORDER_DLQ || 'orderQueue_DLQ'; // Dead Letter Queue name
+const ORDER_CANCEL_DLQ_NAME = process.env.ORDER_CANCEL_DLQ || 'orderCancelQueue_DLQ'; // Dead Letter Queue for Order Cancel
 
 export const connectRabbitMQ = async (retries = 5, delay = 5000): Promise<Channel> => {
   let attempt = 0;
@@ -13,14 +15,16 @@ export const connectRabbitMQ = async (retries = 5, delay = 5000): Promise<Channe
       const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
       const channel = await connection.createChannel();
 
-      // Delete the queue if it already exists to reset parameters
-      await channel.deleteQueue(QUEUE_NAME, { ifUnused: false, ifEmpty: false });
+      // Delete queues if they already exist to reset parameters
+      await channel.deleteQueue(ORDER_QUEUE_NAME, { ifUnused: false, ifEmpty: false });
+      await channel.deleteQueue(ORDER_CANCEL_QUEUE_NAME, { ifUnused: false, ifEmpty: false });
 
-      // Define Dead Letter Queue
+      // Define Dead Letter Queues
       await channel.assertQueue(DLQ_NAME, { durable: true });
+      await channel.assertQueue(ORDER_CANCEL_DLQ_NAME, { durable: true });
 
-      // Declare main queue with Dead Letter Exchange (DLX) mechanism and TTL
-      await channel.assertQueue(QUEUE_NAME, {
+      // Declare main order queue with Dead Letter Exchange (DLX) mechanism and TTL
+      await channel.assertQueue(ORDER_QUEUE_NAME, {
         durable: true,
         arguments: {
           'x-dead-letter-exchange': '',  // No additional exchange for DLQ
@@ -29,7 +33,17 @@ export const connectRabbitMQ = async (retries = 5, delay = 5000): Promise<Channe
         },
       });
 
-      console.log('✅ Connected to RabbitMQ with DLQ setup');
+      // Declare main order cancel queue with Dead Letter Exchange (DLX) mechanism and TTL
+      await channel.assertQueue(ORDER_CANCEL_QUEUE_NAME, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': '',  // No additional exchange for DLQ
+          'x-dead-letter-routing-key': ORDER_CANCEL_DLQ_NAME, // Messages go to the DLQ
+          'x-message-ttl': 60000, // Message TTL in milliseconds, after which it will be dead-lettered
+        },
+      });
+
+      console.log('✅ Connected to RabbitMQ with DLQ setup for both order and order-cancel queues');
       return channel;
     } catch (err) {
       attempt++;
