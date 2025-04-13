@@ -145,6 +145,6 @@ show-order-db-database-table
 
 
 # List all running containers and show logs
-# list-running-containers
+list-running-containers
 
 echo -e "\n✅✅✅ ALL TESTS ARE DONE!!! ✅✅✅"
