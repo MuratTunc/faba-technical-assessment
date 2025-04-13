@@ -115,7 +115,7 @@ ORDER_PAYLOAD='{
   "customerName": "Faba Thinks",
   "item": "item105",
   "total": 99.99,
-  "status": "pending"
+  "status": "active"
 }'
 IDEMPOTENCY_KEY=$(date +%s%N) # Generate a unique Idempotency Key (using nanosecond timestamp)
 send_post_request "http://localhost:3000/api/order-create" "$IDEMPOTENCY_KEY" "$ORDER_PAYLOAD"
@@ -129,7 +129,7 @@ ORDER_PAYLOAD='{
   "customerName": "Faba Thinks Twice",
   "item": "item101",
   "total": 99.99,
-  "status": "pending"
+  "status": "cancel"
 }'
 IDEMPOTENCY_KEY=$(date +%s%N)
 send_post_request "http://localhost:3000/api/order-create" "$IDEMPOTENCY_KEY" "$ORDER_PAYLOAD"

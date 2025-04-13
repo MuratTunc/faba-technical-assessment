@@ -1,6 +1,5 @@
 // src/index.ts
 import { sequelize } from './config/database';
-import { OrderModel } from './models/order';
 import {
   consumeOrders,
   consumeDLQ,
