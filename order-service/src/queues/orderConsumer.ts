@@ -22,7 +22,7 @@ export const consumeOrders = async () => {
         const savedOrder = await OrderModel.create({
           id: order.id,
           customerName: order.customerName,
-          items: order.items,
+          item: order.item,
           total: order.total,
           status: order.status,
         });
@@ -70,7 +70,7 @@ export const consumeDLQ = async () => {
         const savedOrder = await OrderModel.create({
           id: order.id,
           customerName: order.customerName,
-          items: order.items,
+          item: order.item,
           total: order.total,
           status: order.status,
         });

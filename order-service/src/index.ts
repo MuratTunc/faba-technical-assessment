@@ -6,7 +6,7 @@ import { consumeDLQ } from './queues/orderConsumer'; // Import DLQ consumer func
 import logger from './utils/logger'; // Import the logger utility
 
 // Sync models and start consuming messages
-sequelize.sync({ force: false })
+sequelize.sync({ force: true })
   .then(async () => {
     logger.info('✅ Tables synced with the database');
 

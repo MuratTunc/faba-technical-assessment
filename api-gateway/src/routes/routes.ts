@@ -7,14 +7,15 @@ import { CustomError } from '../utils/custom-error';
 export const orderRoute = (channel: Channel): Router => {
   const router = Router();
 
-  router.post('/order', idempotencyMiddleware, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const { customerName, items, total, status } = req.body;
+  // POST /order-created route
+  router.post('/order-create', idempotencyMiddleware, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const { customerName, item, total, status } = req.body; // Adjusted to "item" as per previous change
 
-    // ✅ Validate request
-    if (!customerName || !items || !total || !status) {
+    // Validate request
+    if (!customerName || !item || !total || !status) {
       const error = new CustomError(
         'ORDER_VALIDATION_FAILED',
-        'Missing customerName, items, total, or status',
+        'Missing customerName, item, total, or status',
         400
       );
       logger.warn(`❌ ${error.code}: ${error.message}`);
@@ -24,7 +25,7 @@ export const orderRoute = (channel: Channel): Router => {
     const orderData = {
       id: `${Date.now()}`,
       customerName,
-      items,
+      item,  // Storing a single item
       total,
       status,
       createdAt: new Date(),
@@ -32,7 +33,7 @@ export const orderRoute = (channel: Channel): Router => {
     };
 
     try {
-      // Send order to RabbitMQ
+      // Send order to RabbitMQ queue
       channel.sendToQueue('orderQueue', Buffer.from(JSON.stringify(orderData)), {
         persistent: true,
       });
@@ -43,7 +44,7 @@ export const orderRoute = (channel: Channel): Router => {
 
       logger.info(`📦 Order sent: ${orderData.id} for customer: ${customerName}`);
       res.status(200).json({ message: 'Order created successfully!', orderId: orderData.id });
-
+      next();
     } catch (err: any) {
       logger.error(`❌ ORDER_CREATION_FAILED: ${err.message}`, { stack: err.stack });
       return next(

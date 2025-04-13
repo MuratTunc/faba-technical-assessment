@@ -1,11 +1,10 @@
-// src/models/orders.ts
-import { Sequelize, Model, DataTypes } from 'sequelize';
+import { Model, DataTypes } from 'sequelize';
 import { sequelize } from '../config/database';  // Make sure this is pointing to the correct database config
 
 export interface Order {
   id: string;
   customerName: string;
-  items: string[];
+  item: string;        // Changed from "items" to a single "item"
   total: number;
   status: string;
 }
@@ -13,7 +12,7 @@ export interface Order {
 export class OrderModel extends Model<Order> {
   public id!: string;
   public customerName!: string;
-  public items!: string[];
+  public item!: string;  // Changed field name
   public total!: number;
   public status!: string;
 }
@@ -29,8 +28,8 @@ OrderModel.init(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    items: {
-      type: DataTypes.JSON, // JSON field for an array of items
+    item: {            
+      type: DataTypes.STRING,  
       allowNull: false,
     },
     total: {
