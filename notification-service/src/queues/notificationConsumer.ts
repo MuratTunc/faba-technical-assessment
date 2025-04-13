@@ -1,73 +1,61 @@
-import amqp from 'amqplib';
+import { connectToRabbitMQ } from '../services/rabbitmqService';  // Import the RabbitMQ connection function
+import logger from '../utils/logger';                              // Import the logger utility
+import { CustomError } from '../utils/custom-error';              // Import the CustomError class
 
 // Define the event names
 const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated';
 const NOTIFICATION_SENT_EVENT = 'notification.sent';  // The event to be published by the notification service
 
-const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
-const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
 const NOTIFICATION_QUEUE = process.env.NOTIFICATION_QUEUE || 'notificationQueue';  // The queue for notification events
 const INVENTORY_EXCHANGE = 'inventory-events';  // Exchange for inventory events
 
-// Connect to RabbitMQ
-async function connectToRabbitMQ() {
-  try {
-    const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
-    const channel = await connection.createChannel();
 
-    // Ensure the notification queue and exchanges are created
-    await channel.assertQueue(NOTIFICATION_QUEUE, { durable: true });
-    await channel.assertExchange(INVENTORY_EXCHANGE, 'topic', { durable: true });
+const EVENT_VERSION = 'v1';
 
-    // Bind the queue to the 'inventory.status.updated' event
-    await channel.bindQueue(NOTIFICATION_QUEUE, INVENTORY_EXCHANGE, INVENTORY_STATUS_UPDATED_EVENT);
-
-    return channel;
-  } catch (error) {
-    console.error('❌ Failed to connect to RabbitMQ:', error);
-    process.exit(1);
-  }
-}
-
-// Consume the 'inventory.status.updated' event and publish 'notification.sent' event
 export const consumeInventoryStatusUpdated = async () => {
-  const channel = await connectToRabbitMQ();
+  // Connect to RabbitMQ and bind the queue to listen for inventory.status.updated events
+  const channel = await connectToRabbitMQ(NOTIFICATION_QUEUE, INVENTORY_EXCHANGE, INVENTORY_STATUS_UPDATED_EVENT);
 
-  console.log(`[🟢] Waiting for '${INVENTORY_STATUS_UPDATED_EVENT}' messages in '${NOTIFICATION_QUEUE}'`);
+  logger.info(`Waiting for '${INVENTORY_STATUS_UPDATED_EVENT}' messages in '${NOTIFICATION_QUEUE}'`);
 
   channel.consume(NOTIFICATION_QUEUE, async (msg) => {
     if (msg !== null) {
       try {
         // Parse the incoming message
         const event = JSON.parse(msg.content.toString());
-        const inventoryUpdate = event.data;
-        console.log('📩 Received inventory.status.updated event:', inventoryUpdate);
+        logger.info('📩 Received inventory.status.updated event:', event);
 
-        // Prepare the notification event
+        // Prepare the notification.sent event payload with parametric versioning
         const notificationSentEvent = {
-          event: NOTIFICATION_SENT_EVENT,  // The event name we will publish
+          event: NOTIFICATION_SENT_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
           data: {
-            orderId: inventoryUpdate.orderId,
-            updatedItems: inventoryUpdate.updatedItems,
-            message: `Inventory has been updated for order ${inventoryUpdate.orderId}.`
+            message: `Inventory has been updated for order ${event.data.orderId}.`
           },
         };
 
-        // Publish the notification.sent event
+        // Publish the notification.sent event to the inventory-events exchange
         channel.publish(
           INVENTORY_EXCHANGE,
-          NOTIFICATION_SENT_EVENT,  // The routing key for notification events
+          NOTIFICATION_SENT_EVENT,
           Buffer.from(JSON.stringify(notificationSentEvent)),
           { persistent: true }
         );
 
-        console.log(`📤 Published '${NOTIFICATION_SENT_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
+        logger.info(`📤 Published '${NOTIFICATION_SENT_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
 
         // Acknowledge the message
         channel.ack(msg);
       } catch (error) {
-        console.error('❌ Error processing message:', error);
-        // Nack the message and requeue in case of an error
+        // Wrap the error in a CustomError for structured error handling
+        const customError = new CustomError(
+          'NOTIFICATION_PROCESSING_ERROR',
+          'Error processing inventory status update message',
+          500,
+          { originalError: error }
+        );
+        logger.error(`❌ ${customError.message}`, customError.details);
+        // Negative acknowledgment: requeue the message for further processing
         channel.nack(msg, false, true);
       }
     }

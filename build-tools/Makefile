@@ -3,7 +3,7 @@ ENV_FILE := .env
 WAIT_TIME ?= 5  # Default wait time is 5 seconds, can be overridden
 
 ## build: Stops and removes all running containers, builds the project, and starts docker-compose
-build: stop_all_containers check_postgres
+build: stop_all_containers clear_rabbitmq_data check_postgres
 	echo "🚀 Building (when required) and starting docker images with environment variables..."
 	docker-compose up --build -d
 	echo "✅ Docker images built and started!"
@@ -58,6 +58,15 @@ wait_for_integration_test:
 		sleep 1; \
 	done
 	echo " ✅"
+
+
+
+## clear_rabbitmq_data: Removes RabbitMQ data volume and cleans up related resources
+clear_rabbitmq_data:
+	@echo "⚡ Clearing RabbitMQ data..."
+	# Remove RabbitMQ volume directly by name
+	docker volume rm build-tools_rabbitmq_db_data
+	@echo "✅ RabbitMQ data cleared!"
 
 
 

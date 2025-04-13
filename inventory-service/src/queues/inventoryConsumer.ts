@@ -1,81 +1,79 @@
-import amqp from 'amqplib';
+import { connectToRabbitMQ } from '../services/rabbitmqService';
+import logger from '../utils/logger';
+import { CustomError } from '../utils/custom-error'; // Import your custom error class
 
-// Define an interface for the item structure
-interface OrderItem {
-  productId: string;  // Assuming productId is a string, change type if needed
-  quantity: number;   // Assuming quantity is a number, change type if needed
-}
-
-const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq';
-const RABBITMQ_PORT = process.env.RABBITMQ_PORT || '5672';
-const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';  // Updated to correct queue name
+// Define the queue and exchange names
+const INVENTORY_QUEUE = process.env.INVENTORY_QUEUE || 'inventoryQueue';
 const INVENTORY_EXCHANGE = 'inventory-events';
-const ORDER_EXCHANGE = 'order-events';
 const ORDER_CREATED_EVENT = 'order.created';
-const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated'; // Updated event name
+const INVENTORY_STATUS_UPDATED_EVENT = 'inventory.status.updated';
 
-async function connectToRabbitMQ() {
-  try {
-    const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}:${RABBITMQ_PORT}`);
-    const channel = await connection.createChannel();
-
-    // Ensure both exchanges and the queue are created
-    await channel.assertQueue(INVENTORY_QUEUE, { durable: true });
-    await channel.assertExchange(ORDER_EXCHANGE, 'topic', { durable: true });
-    await channel.assertExchange(INVENTORY_EXCHANGE, 'topic', { durable: true });
-
-    // Bind the queue to the order.created event from the order exchange
-    await channel.bindQueue(INVENTORY_QUEUE, ORDER_EXCHANGE, ORDER_CREATED_EVENT);
-
-    return channel;
-  } catch (error) {
-    console.error('❌ Failed to connect to RabbitMQ:', error);
-    process.exit(1);
-  }
-}
+// You can set the version dynamically via environment variable or another method
+const EVENT_VERSION = 'v1';
 
 export const consumeOrderCreated = async () => {
   const channel = await connectToRabbitMQ();
 
-  console.log(`[🟢] Waiting for '${ORDER_CREATED_EVENT}' messages in '${INVENTORY_QUEUE}'`);
+  logger.info(`📦 Waiting for '${ORDER_CREATED_EVENT}' messages in '${INVENTORY_QUEUE}'`);
 
   channel.consume(INVENTORY_QUEUE, async (msg) => {
     if (msg !== null) {
       try {
-        // Parse the incoming message
         const event = JSON.parse(msg.content.toString());
         const order = event.data;
-        console.log('📩 Received order.created event:', order);
 
-        // Prepare and publish the inventory status update event
+        if (!order?.id) {
+          throw new CustomError(
+            'INVALID_ORDER_DATA',
+            'Order ID is missing in the event payload',
+            400,
+            { payload: event }
+          );
+        }
+
+        logger.info('📩 Received order.created event:', order);
+
+        // Parametric versioning applied here
+        const orderCreatedEvent = {
+          event: ORDER_CREATED_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
+          data: order,
+        };
+
+        // Process inventory update event with dynamic version
         const inventoryStatusUpdatedEvent = {
-          event: INVENTORY_STATUS_UPDATED_EVENT, // Changed to 'inventory.status.updated'
+          event: INVENTORY_STATUS_UPDATED_EVENT,
+          version: EVENT_VERSION,  // Use the dynamic version
           data: {
             orderId: order.id,
-            // You can still include the items in the updated event if needed
-            updatedItems: order.items.map((item: OrderItem) => ({  // Type the 'item' parameter
-              productId: item.productId,
-              deducted: item.quantity,
-            })),
+            message: `Inventory checked or placeholder update for order ${order.id}.`,
           },
         };
 
-        // Publish to the inventory-events exchange
+        // Publish the updated event with dynamic version
         channel.publish(
           INVENTORY_EXCHANGE,
-          INVENTORY_STATUS_UPDATED_EVENT, // Updated event name
+          INVENTORY_STATUS_UPDATED_EVENT,
           Buffer.from(JSON.stringify(inventoryStatusUpdatedEvent)),
           { persistent: true }
         );
 
-        console.log(`📤 Published '${INVENTORY_STATUS_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
+        logger.info(`📤 Published '${INVENTORY_STATUS_UPDATED_EVENT}' event to '${INVENTORY_EXCHANGE}'`);
 
         // Acknowledge the message
         channel.ack(msg);
-      } catch (error) {
-        console.error('❌ Error processing message:', error);
-        // Nack the message and requeue in case of an error
-        channel.nack(msg, false, true);
+      } catch (error: any) {
+        if (error instanceof CustomError) {
+          logger.error(`❌ CustomError [${error.code}]: ${error.message}`, {
+            details: error.details,
+            statusCode: error.statusCode
+          });
+        } else {
+          logger.error('❌ Unhandled error:', error);
+        }
+
+        // Requeue the message in case of error
+        channel.nack(msg, false, true); // Requeue the message
       }
     }
   });
